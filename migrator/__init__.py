@@ -18,48 +18,53 @@ def migrate(app, changelog):
     Transaction.init(app)
     Transaction.connect(app)
 
-    with Transaction() as lock_transaction:
-        _create_lock(lock_transaction)
+    _create_lock()
 
-        print(f"Reading from {app.config.get('DB_DATABASE', 'hub')}.DATABASECHANGELOG")
+    print(f"Reading from {app.config.get('DB_DATABASE', 'hub')}.DATABASECHANGELOG")
 
+    try:
         with open(f'{changelog}/changelog.yaml', 'r') as file:
             migrations = yaml.load(file, Loader=yaml.FullLoader)
 
-        for migration in migrations:
-            _apply_migration(changelog, migration)
+    except FileNotFoundError:
+        print(f'Failed to read changelog file at {changelog}')
 
-        _release_lock(lock_transaction)
+    for migration in migrations:
+        _apply_migration(changelog, migration)
+
+    _release_lock()
 
     Transaction.close()
 
 
-def _create_lock(transaction):
+def _create_lock():
     wait_lock = WAIT_LOCK
 
-    while wait_lock > 0:
-        transaction.execute('SELECT LOCKED, LOCKEDBY FROM DATABASECHANGELOGLOCK ORDER BY ID')
-        current_lock = transaction.fetchone()
+    with Transaction() as transaction:
+        while wait_lock > 0:
+            transaction.execute('SELECT LOCKED, LOCKEDBY FROM DATABASECHANGELOGLOCK ORDER BY ID')
+            current_lock = transaction.fetchone()
 
-        # workaround to support bit column
-        if current_lock.get('LOCKED').hex()[-1] == '1':
-            print(f'Database is currently locked! Waiting {WAIT_PER_STEP} seconds to try again...')
+            # workaround to support bit column
+            if current_lock.get('LOCKED').hex()[-1] == '1':
+                print(f'Database is currently locked! Waiting {WAIT_PER_STEP} seconds to try again...')
 
-            sleep(WAIT_PER_STEP)
-            wait_lock -= WAIT_PER_STEP
+                sleep(WAIT_PER_STEP)
+                wait_lock -= WAIT_PER_STEP
+
+            else:
+                print('Successfully acquired change log lock')
+                transaction.execute('UPDATE DATABASECHANGELOGLOCK SET LOCKED = 1 WHERE ID = 1')
+                return
 
         else:
-            print('Successfully acquired change log lock')
-            transaction.execute('UPDATE DATABASECHANGELOGLOCK SET LOCKED = 1 WHERE ID = 1')
-            return
-
-    else:
-        print(f'Waited {WAIT_LOCK} seconds but the lock it\'s not released, given up!')
+            print(f'Waited {WAIT_LOCK} seconds but the lock it\'s not released, given up!')
 
 
-def _release_lock(transaction):
-    transaction.execute('UPDATE DATABASECHANGELOGLOCK SET LOCKED = 0 WHERE ID = 1')
-    print('Successfully released change log lock')
+def _release_lock():
+    with Transaction() as transaction:
+        transaction.execute('UPDATE DATABASECHANGELOGLOCK SET LOCKED = 0 WHERE ID = 1')
+        print('Successfully released change log lock')
 
 
 def _apply_migration(changelog, migration):
@@ -73,10 +78,10 @@ def _apply_migration(changelog, migration):
 
             sql = re.sub(COMMENT_REGEX, '', raw_text)
 
-            with Transaction() as migrate_transaction:
-                migrate_transaction.execute(sql)
+            with Transaction() as transaction:
+                transaction.execute(sql)
 
-                migrate_transaction.execute(
+                transaction.execute(
                     '''
                     INSERT INTO DATABASECHANGELOG (
                         ID,
@@ -126,12 +131,12 @@ def _extract_migration_metadata(raw_text):
 
 class Transaction:
 
-    _con = None
+    connection = None
 
     @classmethod
     def connect(cls, app):
-        if cls._con is None:
-            cls._con = Connection(
+        if cls.connection is None:
+            cls.connection = Connection(
                 user=app.config.get('DB_USER', 'cwi'),
                 password=app.config.get('DB_PASSWORD', 'cwi'),
                 host=app.config.get('DB_HOST', 'localhost'),
@@ -139,20 +144,22 @@ class Transaction:
                 cursorclass=DictCursor
             )
 
-        elif not cls._con.open:
-            cls._con.ping(reconnect=True)
+        elif not cls.connection.open:
+            cls.connection.ping(reconnect=True)
 
     def __enter__(self):
-        self._con.begin()
-        return self._con.cursor()
+        self.connection.begin()
+        return self.connection.cursor()
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         if exc_value:
-            self._con.rollback()
+            self.connection.rollback()
+
+            _release_lock()
 
             return False
 
-        self._con.commit()
+        self.connection.commit()
         return True
 
     @classmethod
@@ -216,4 +223,4 @@ class Transaction:
 
     @classmethod
     def close(cls):
-        cls._con.close()
+        cls.connection.close()

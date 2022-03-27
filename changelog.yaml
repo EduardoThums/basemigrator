@@ -1,3 +1,0 @@
-- file: Table1/migration.sql
-- file: Table2/migration.sql
-  context: dev, prod
