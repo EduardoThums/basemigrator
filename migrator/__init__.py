@@ -13,28 +13,37 @@ COMMENT_REGEX = r'--.*'
 WAIT_LOCK = 10
 WAIT_PER_STEP = 5
 
+applied_migrations = None
+
 
 def migrate(app, changelog):
     Transaction.init(app)
     Transaction.connect(app)
 
-    _create_lock()
-
-    print(f"Reading from {app.config.get('DB_DATABASE', 'hub')}.DATABASECHANGELOG")
-
     try:
-        with open(f'{changelog}/changelog.yaml', 'r') as file:
-            migrations = yaml.load(file, Loader=yaml.FullLoader)
+        _create_lock()
 
-    except FileNotFoundError:
-        print(f'Failed to read changelog file at {changelog}')
+        print(f"Reading from {app.config.get('DB_DATABASE', 'hub')}.DATABASECHANGELOG")
 
-    for migration in migrations:
-        _apply_migration(changelog, migration)
+        try:
+            with open(f'{changelog}/changelog.yaml', 'r') as file:
+                migrations = yaml.load(file, Loader=yaml.FullLoader)
 
-    _release_lock()
+        except FileNotFoundError:
+            print(f'Failed to read changelog file at {changelog}')
 
-    Transaction.close()
+        for migration in migrations:
+            _apply_migration(changelog, migration)
+
+    except Exception as e:
+        _release_lock()
+        Transaction.close()
+
+        raise e
+
+    else:
+        _release_lock()
+        Transaction.close()
 
 
 def _create_lock():
@@ -76,6 +85,10 @@ def _apply_migration(changelog, migration):
 
             metadata = _extract_migration_metadata(raw_text)
 
+            if not _should_apply_migration(metadata.get('migration_id')):
+                print(f'Migration "{metadata.get("migration_id")}" already applied! Skipping...')
+                return
+
             sql = re.sub(COMMENT_REGEX, '', raw_text)
 
             with Transaction() as transaction:
@@ -116,6 +129,10 @@ def _apply_migration(changelog, migration):
                 )
 
 
+def _should_apply_migration(migration_id):
+    return migration_id not in _get_already_applied_migrations()
+
+
 def _extract_migration_metadata(raw_text):
     info = re.findall(AUTHOR_AND_ID_REGEX, raw_text)
 
@@ -127,6 +144,16 @@ def _extract_migration_metadata(raw_text):
 
     else:
         return {}
+
+
+def _get_already_applied_migrations():
+    global applied_migrations
+
+    if applied_migrations is None:
+        applied_migrations = Transaction.select_autocommit('SELECT ID FROM DATABASECHANGELOG ORDER BY ORDEREXECUTED')
+        applied_migrations = [migration.get('ID') for migration in applied_migrations]
+
+    return applied_migrations
 
 
 class Transaction:
@@ -154,8 +181,6 @@ class Transaction:
     def __exit__(self, exc_type, exc_value, exc_traceback):
         if exc_value:
             self.connection.rollback()
-
-            _release_lock()
 
             return False
 
@@ -224,3 +249,9 @@ class Transaction:
     @classmethod
     def close(cls):
         cls.connection.close()
+
+    @classmethod
+    def select_autocommit(cls, query, args=[]):
+        with cls() as transaction:
+            transaction.execute(query, args)
+            return transaction.fetchall()
