@@ -8,7 +8,7 @@ import yaml
 from contextlib import suppress
 
 
-AUTHOR_AND_ID_REGEX = r'--\s+changeset\s+([^:]+):(.*)'
+AUTHOR_AND_ID_REGEX = r'--[\s+]?changeset[\s+]?([^:]+):(.*)'
 COMMENT_REGEX = r'--.*'
 WAIT_LOCK = 10
 WAIT_PER_STEP = 5
@@ -166,11 +166,11 @@ def _should_apply_migration(migration_id, md5sum, context):
 
 
 def _extract_migration_metadata(raw_text):
-    info = re.findall(AUTHOR_AND_ID_REGEX, raw_text)
+    metadata = re.findall(AUTHOR_AND_ID_REGEX, raw_text)
 
-    if len(info) > 0:
-        author = info[0][0]
-        migration_id = info[0][1]
+    if len(metadata) > 0:
+        author = metadata[0][0]
+        migration_id = metadata[0][1]
 
         return {'author': author, 'migration_id': migration_id}
 
