@@ -1,5 +1,9 @@
+from flask import Flask
 import re
 import yaml
+from migrator import migrate
+
+from pathlib import Path
 
 
 def convert_from_xml_to_json():
@@ -38,6 +42,3 @@ def convert_from_xml_to_yaml():
 
     with open('changelog.yaml', 'w') as changelog:
         yaml.dump(migrations, changelog, sort_keys=False)
-
-
-convert_from_xml_to_yaml()

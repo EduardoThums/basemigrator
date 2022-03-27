@@ -4,31 +4,30 @@ import warnings
 import re
 from time import sleep
 from hashlib import md5
+import yaml
+from contextlib import suppress
 
 
-SQL_PATH_REGEX = r'file="([^"]+)'
 AUTHOR_AND_ID_REGEX = r'--changeset ([^:]+):(.*)'
 COMMENT_REGEX = r'--.*'
 WAIT_LOCK = 10
 WAIT_PER_STEP = 5
 
-__conn = None
-
 
 def migrate(app, changelog):
-    global __conn
-    #
-
     Transaction.init(app)
     Transaction.connect(app)
 
-    with Transaction(is_lock=True) as lock_transaction:
+    with Transaction() as lock_transaction:
         _create_lock(lock_transaction)
 
         print(f"Reading from {app.config.get('DB_DATABASE', 'hub')}.DATABASECHANGELOG")
 
-        for full_path, relative_path in _get_changelog_files(changelog):
-            _apply_migration(full_path, relative_path)
+        with open(f'{changelog}/changelog.yaml', 'r') as file:
+            migrations = yaml.load(file, Loader=yaml.FullLoader)
+
+        for migration in migrations:
+            _apply_migration(changelog, migration)
 
         _release_lock(lock_transaction)
 
@@ -63,65 +62,56 @@ def _release_lock(transaction):
     print('Successfully released change log lock')
 
 
-def _get_changelog_files(changelog):
+def _apply_migration(changelog, migration):
+    file_name = migration.get('file')
 
-    with open(f'{changelog}/changelog.xml', 'r') as file:
-        for line in file.readlines():
-            path = re.findall(SQL_PATH_REGEX, line)
+    with suppress(FileNotFoundError):
+        with open(f'{changelog}/{file_name}', 'r') as file:
+            raw_text = file.read()
 
-            if len(path) > 0:
-                path = path[0]
+            metadata = _extract_migration_metadata(raw_text)
 
-                yield f'{changelog}/{path}', path
+            sql = re.sub(COMMENT_REGEX, '', raw_text)
 
+            with Transaction() as migrate_transaction:
+                migrate_transaction.execute(sql)
 
-def _apply_migration(full_path, relative_path):
-    with open(full_path, 'r') as file:
-        raw_text = file.read()
-
-        info = _get_migration_info(raw_text)
-
-        sql = re.sub(COMMENT_REGEX, '', raw_text)
-
-        with Transaction() as migrate_transaction:
-            migrate_transaction.execute(sql)
-
-            migrate_transaction.execute(
-                '''
-                INSERT INTO DATABASECHANGELOG (
-                    ID,
-                    AUTHOR,
-                    FILENAME,
-                    DATEEXECUTED,
-                    ORDEREXECUTED,
-                    EXECTYPE,
-                    MD5SUM,
-                    DESCRIPTION
+                migrate_transaction.execute(
+                    '''
+                    INSERT INTO DATABASECHANGELOG (
+                        ID,
+                        AUTHOR,
+                        FILENAME,
+                        DATEEXECUTED,
+                        ORDEREXECUTED,
+                        EXECTYPE,
+                        MD5SUM,
+                        DESCRIPTION
+                    )
+                    VALUES (
+                        %s,
+                        %s,
+                        %s,
+                        NOW(),
+                        IFNULL(
+                            (SELECT ORDEREXECUTED + 1 FROM DATABASECHANGELOG d ORDER BY ORDEREXECUTED DESC LIMIT 1),
+                            1
+                        ),
+                        'EXECUTED',
+                        %s,
+                        'sql'
+                    );
+                    ''',
+                    [
+                        metadata['migration_id'],
+                        metadata['author'],
+                        file_name,
+                        md5(raw_text.encode('utf-8')).hexdigest()
+                    ]
                 )
-                VALUES (
-                    %s,
-                    %s,
-                    %s,
-                    NOW(),
-                    IFNULL(
-                        (SELECT ORDEREXECUTED + 1 FROM DATABASECHANGELOG d ORDER BY ORDEREXECUTED DESC LIMIT 1),
-                        1
-                    ),
-                    'EXECUTED',
-                    %s,
-                    'sql'
-                );
-                ''',
-                [
-                    info['migration_id'],
-                    info['author'],
-                    relative_path,
-                    md5(raw_text.encode('utf-8')).hexdigest()
-                ]
-            )
 
 
-def _get_migration_info(raw_text):
+def _extract_migration_metadata(raw_text):
     info = re.findall(AUTHOR_AND_ID_REGEX, raw_text)
 
     if len(info) > 0:
@@ -137,9 +127,6 @@ def _get_migration_info(raw_text):
 class Transaction:
 
     _con = None
-
-    def __init__(self, is_lock=False):
-        self.is_lock = is_lock
 
     @classmethod
     def connect(cls, app):
@@ -162,10 +149,6 @@ class Transaction:
     def __exit__(self, exc_type, exc_value, exc_traceback):
         if exc_value:
             self._con.rollback()
-
-            if self.is_lock:
-                with Transaction():
-                    _release_lock(self._con.cursor())
 
             return False
 
