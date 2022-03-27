@@ -4,12 +4,13 @@ import yaml
 from migrator import migrate
 
 from pathlib import Path
+import sys
 
 
-def convert_from_xml_to_json():
+def convert_from_xml_to_json(work_dir):
     migrations = []
 
-    with open('changelog.xml', 'r') as changelog:
+    with open(f'{work_dir}/changelog.xml', 'r') as changelog:
         for line in changelog.readlines():
             migration = {}
 
@@ -37,8 +38,20 @@ def convert_from_xml_to_json():
     return migrations
 
 
-def convert_from_xml_to_yaml():
-    migrations = convert_from_xml_to_json()
+def convert_from_xml_to_yaml(work_dir):
+    migrations = convert_from_xml_to_json(work_dir)
 
-    with open('changelog.yaml', 'w') as changelog:
+    with open(f'{work_dir}/changelog.yaml', 'w') as changelog:
         yaml.dump(migrations, changelog, sort_keys=False)
+
+    print('Changelog in YAML format created!')
+
+
+if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        print('Missing working dir! Exiting')
+        exit(1)
+
+    work_dir = sys.argv[1]
+
+    convert_from_xml_to_yaml(work_dir)
