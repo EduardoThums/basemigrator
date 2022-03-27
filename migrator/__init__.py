@@ -8,7 +8,7 @@ import yaml
 from contextlib import suppress
 
 
-AUTHOR_AND_ID_REGEX = r'--changeset ([^:]+):(.*)'
+AUTHOR_AND_ID_REGEX = r'--\s+changeset\s+([^:]+):(.*)'
 COMMENT_REGEX = r'--.*'
 WAIT_LOCK = 10
 WAIT_PER_STEP = 5
