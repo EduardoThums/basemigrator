@@ -21,7 +21,7 @@ def migrate(app, changelog, context):
     global current_context
     current_context = context
 
-    print('Executing Update')
+    print('\nExecuting Update')
 
     Transaction.init(app)
     Transaction.connect(app)
@@ -104,7 +104,7 @@ def _apply_migration(changelog, migration):
             print(f'--> {migration_id}::executed')
 
             with Transaction() as transaction:
-                transaction.execute(sql)
+                transaction.executemany(sql, [])
 
                 transaction.execute(
                     '''
