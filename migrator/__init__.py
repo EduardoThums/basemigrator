@@ -17,6 +17,8 @@ applied_migrations = None
 
 
 def migrate(app, changelog):
+    print('Executing Update')
+
     Transaction.init(app)
     Transaction.connect(app)
 
@@ -44,6 +46,8 @@ def migrate(app, changelog):
     else:
         _release_lock()
         Transaction.close()
+
+        print('Update Successful')
 
 
 def _create_lock():
@@ -82,11 +86,13 @@ def _apply_migration(changelog, migration):
     with suppress(FileNotFoundError):
         with open(f'{changelog}/{file_name}', 'r') as file:
             raw_text = file.read()
+            md5sum = md5(raw_text.encode('utf-8')).hexdigest()
 
             metadata = _extract_migration_metadata(raw_text)
+            migration_id = metadata.get("migration_id")
 
-            if not _should_apply_migration(metadata.get('migration_id')):
-                print(f'Migration "{metadata.get("migration_id")}" already applied! Skipping...')
+            if not _should_apply_migration(migration_id, md5sum):
+                print(f'Migration "{migration_id}" already applied! Skipping...')
                 return
 
             sql = re.sub(COMMENT_REGEX, '', raw_text)
@@ -121,16 +127,27 @@ def _apply_migration(changelog, migration):
                     );
                     ''',
                     [
-                        metadata['migration_id'],
+                        migration_id,
                         metadata['author'],
                         file_name,
-                        md5(raw_text.encode('utf-8')).hexdigest()
+                        md5sum
                     ]
                 )
 
 
-def _should_apply_migration(migration_id):
-    return migration_id not in _get_already_applied_migrations()
+def _should_apply_migration(migration_id, md5sum):
+    migration = _get_already_applied_migrations().get(migration_id)
+
+    if migration is not None:
+        old_md5sum = migration.get('md5sum')
+
+        if md5sum != old_md5sum:
+            raise Exception(f'Validation error! {migration_id} was: {old_md5sum} but now is: {md5sum}')
+
+        return False
+
+    else:
+        return True
 
 
 def _extract_migration_metadata(raw_text):
@@ -150,8 +167,14 @@ def _get_already_applied_migrations():
     global applied_migrations
 
     if applied_migrations is None:
-        applied_migrations = Transaction.select_autocommit('SELECT ID FROM DATABASECHANGELOG ORDER BY ORDEREXECUTED')
-        applied_migrations = [migration.get('ID') for migration in applied_migrations]
+        applied_migrations = Transaction.select_autocommit(
+            'SELECT ID, MD5SUM FROM DATABASECHANGELOG ORDER BY ORDEREXECUTED'
+        )
+
+        applied_migrations = {
+            migration.get('ID'): {'md5sum': migration.get('MD5SUM')}
+            for migration in applied_migrations
+        }
 
     return applied_migrations
 
