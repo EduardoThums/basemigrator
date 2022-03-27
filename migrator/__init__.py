@@ -14,9 +14,13 @@ WAIT_LOCK = 10
 WAIT_PER_STEP = 5
 
 applied_migrations = None
+current_context = None
 
 
-def migrate(app, changelog):
+def migrate(app, changelog, context):
+    global current_context
+    current_context = context
+
     print('Executing Update')
 
     Transaction.init(app)
@@ -82,6 +86,7 @@ def _release_lock():
 
 def _apply_migration(changelog, migration):
     file_name = migration.get('file')
+    context = migration.get('context')
 
     with suppress(FileNotFoundError):
         with open(f'{changelog}/{file_name}', 'r') as file:
@@ -91,7 +96,7 @@ def _apply_migration(changelog, migration):
             metadata = _extract_migration_metadata(raw_text)
             migration_id = metadata.get("migration_id")
 
-            if not _should_apply_migration(migration_id, md5sum):
+            if not _should_apply_migration(migration_id, md5sum, context):
                 return
 
             sql = re.sub(COMMENT_REGEX, '', raw_text)
@@ -138,7 +143,14 @@ def _apply_migration(changelog, migration):
             print(f'--> {migration_id}::ran successfully')
 
 
-def _should_apply_migration(migration_id, md5sum):
+def _should_apply_migration(migration_id, md5sum, context):
+    global current_context
+
+    # if the migration has any context, only apply when the current context are one of them
+    if context is not None:
+        if not re.search(fr'\b{current_context}\b', context):
+            return False
+
     migration = _get_already_applied_migrations().get(migration_id)
 
     if migration is not None:
