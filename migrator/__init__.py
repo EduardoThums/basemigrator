@@ -92,10 +92,11 @@ def _apply_migration(changelog, migration):
             migration_id = metadata.get("migration_id")
 
             if not _should_apply_migration(migration_id, md5sum):
-                print(f'Migration "{migration_id}" already applied! Skipping...')
                 return
 
             sql = re.sub(COMMENT_REGEX, '', raw_text)
+
+            print(f'--> {migration_id}::executed')
 
             with Transaction() as transaction:
                 transaction.execute(sql)
@@ -133,6 +134,8 @@ def _apply_migration(changelog, migration):
                         md5sum
                     ]
                 )
+
+            print(f'--> {migration_id}::ran successfully')
 
 
 def _should_apply_migration(migration_id, md5sum):
