@@ -8,7 +8,7 @@ import yaml
 from contextlib import suppress
 
 
-AUTHOR_AND_ID_REGEX = r'--[\s+]?changeset[\s+]?([^:]+):(.*)'
+AUTHOR_AND_ID_REGEX = r'--[\s+]?changeset[\s+]?([^:]+):([^\s]+)[\s+]?(endDelimiter:)?([^\s]+)?'
 COMMENT_REGEX = r'--.*'
 EMPTY_LINE_REGEX = r'^\n'
 
@@ -104,7 +104,7 @@ def _apply_migration(changelog, migration):
             print(f'--> {file_name}::executed')
 
             with Transaction() as transaction:
-                for statement in sql.split(';'):
+                for statement in sql.split(metadata.get('delimiter')):
                     statement = re.sub(EMPTY_LINE_REGEX, '', statement, flags=re.MULTILINE)
 
                     if statement:
@@ -161,13 +161,20 @@ def _should_apply_migration(file_name, context):
 
 
 def _extract_migration_metadata(raw_text):
-    metadata = re.findall(AUTHOR_AND_ID_REGEX, raw_text)
+    match = re.findall(AUTHOR_AND_ID_REGEX, raw_text)
 
-    if len(metadata) > 0:
-        author = metadata[0][0]
-        migration_id = metadata[0][1]
+    if len(match) > 0:
+        metadata = match[0]
 
-        return {'author': author, 'migration_id': migration_id}
+        author = metadata[0]
+        migration_id = metadata[1]
+
+        if len(metadata) >= 4:
+            delimiter = metadata[3].replace('\\', '')
+        else:
+            delimiter = ';'
+
+        return {'author': author, 'migration_id': migration_id, 'delimiter': delimiter}
 
     else:
         # TODO: throw error?
