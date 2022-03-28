@@ -86,64 +86,63 @@ def _apply_migration(changelog, migration):
     file_name = migration.get('file')
     context = migration.get('context')
 
-    with suppress(FileNotFoundError):
-        with open(f'{changelog}/{file_name}', 'r') as file:
-            raw_text = file.read()
-            md5sum = md5(raw_text.encode('utf-8')).hexdigest()
+    with open(f'{changelog}/{file_name}', 'r') as file:
+        raw_text = file.read()
+        md5sum = md5(raw_text.encode('utf-8')).hexdigest()
 
-            if not _should_apply_migration(file_name, context):
-                return
+        if not _should_apply_migration(file_name, context):
+            return
 
-            metadata = _extract_migration_metadata(raw_text)
-            sql = re.sub(COMMENT_REGEX, '', raw_text)
+        metadata = _extract_migration_metadata(raw_text)
+        sql = re.sub(COMMENT_REGEX, '', raw_text)
 
-            print(f'--> {file_name}::executed')
+        print(f'--> {file_name}::executed')
 
-            with Transaction() as transaction:
-                for statement in sql.split(metadata.get('delimiter')):
-                    statement = re.sub(EMPTY_LINE_REGEX, '', statement, flags=re.MULTILINE).strip()
+        with Transaction() as transaction:
+            for statement in sql.split(metadata.get('delimiter')):
+                statement = re.sub(EMPTY_LINE_REGEX, '', statement, flags=re.MULTILINE).strip()
 
-                    if statement:
-                        transaction.execute(statement)
+                if statement:
+                    transaction.execute(statement)
 
-                transaction.execute(
-                    '''
-                    INSERT INTO DATABASECHANGELOG (
-                        ID,
-                        AUTHOR,
-                        FILENAME,
-                        DATEEXECUTED,
-                        ORDEREXECUTED,
-                        EXECTYPE,
-                        MD5SUM,
-                        DESCRIPTION
-                    )
-                    VALUES (
-                        %s,
-                        %s,
-                        %s,
-                        NOW(),
-                        IFNULL(
-                            (SELECT ORDEREXECUTED + 1 FROM DATABASECHANGELOG d ORDER BY ORDEREXECUTED DESC LIMIT 1),
-                            1
-                        ),
-                        'EXECUTED',
-                        %s,
-                        'sql'
-                    );
-                    ''',
-                    [
-                        metadata['migration_id'],
-                        metadata['author'],
-                        file_name,
-                        md5sum
-                    ]
+            transaction.execute(
+                '''
+                INSERT INTO DATABASECHANGELOG (
+                    ID,
+                    AUTHOR,
+                    FILENAME,
+                    DATEEXECUTED,
+                    ORDEREXECUTED,
+                    EXECTYPE,
+                    MD5SUM,
+                    DESCRIPTION
                 )
+                VALUES (
+                    %s,
+                    %s,
+                    %s,
+                    NOW(),
+                    IFNULL(
+                        (SELECT ORDEREXECUTED + 1 FROM DATABASECHANGELOG d ORDER BY ORDEREXECUTED DESC LIMIT 1),
+                        1
+                    ),
+                    'EXECUTED',
+                    %s,
+                    'sql'
+                );
+                ''',
+                [
+                    metadata['migration_id'],
+                    metadata['author'],
+                    file_name,
+                    md5sum
+                ]
+            )
 
-                global applied_migrations
-                applied_migrations.append(file_name)
+            global applied_migrations
+            applied_migrations.append(file_name)
 
-            print(f'--> {file_name}::ran successfully')
+        print(f'--> {file_name}::ran successfully')
 
 
 def _should_apply_migration(file_name, context):
