@@ -34,5 +34,4 @@ $ python
 - CI/CD to code linting
 - Support different sql clients(postgres, sqlite3, etc)
 - Contributing section
-- License
 - tests/
