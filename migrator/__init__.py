@@ -105,7 +105,7 @@ def _apply_migration(changelog, migration):
 
             with Transaction() as transaction:
                 for statement in sql.split(metadata.get('delimiter')):
-                    statement = re.sub(EMPTY_LINE_REGEX, '', statement, flags=re.MULTILINE)
+                    statement = re.sub(EMPTY_LINE_REGEX, '', statement, flags=re.MULTILINE).strip()
 
                     if statement:
                         transaction.execute(statement)
