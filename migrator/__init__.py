@@ -51,7 +51,7 @@ def migrate(app, changelog, context):
         _release_lock()
         Transaction.close()
 
-        print('Update Successful')
+        print('Update Successful\n')
 
 
 def _create_lock():
