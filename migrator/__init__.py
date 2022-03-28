@@ -168,11 +168,7 @@ def _extract_migration_metadata(raw_text):
 
         author = metadata[0]
         migration_id = metadata[1]
-
-        if len(metadata) >= 4:
-            delimiter = metadata[3].replace('\\', '')
-        else:
-            delimiter = ';'
+        delimiter = metadata[3].replace('\\', '') or ';'
 
         return {'author': author, 'migration_id': migration_id, 'delimiter': delimiter}
 
