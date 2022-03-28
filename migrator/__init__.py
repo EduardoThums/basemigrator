@@ -93,15 +93,13 @@ def _apply_migration(changelog, migration):
             raw_text = file.read()
             md5sum = md5(raw_text.encode('utf-8')).hexdigest()
 
-            metadata = _extract_migration_metadata(raw_text)
-            migration_id = metadata.get("migration_id")
-
-            if not _should_apply_migration(migration_id, md5sum, context):
+            if not _should_apply_migration(file_name, context):
                 return
 
+            metadata = _extract_migration_metadata(raw_text)
             sql = re.sub(COMMENT_REGEX, '', raw_text)
 
-            print(f'--> {migration_id}::executed')
+            print(f'--> {file_name}::executed')
 
             with Transaction() as transaction:
                 transaction.executemany(sql, [])
@@ -133,17 +131,17 @@ def _apply_migration(changelog, migration):
                     );
                     ''',
                     [
-                        migration_id,
+                        metadata['migration_id'],
                         metadata['author'],
                         file_name,
                         md5sum
                     ]
                 )
 
-            print(f'--> {migration_id}::ran successfully')
+            print(f'--> {file_name}::ran successfully')
 
 
-def _should_apply_migration(migration_id, md5sum, context):
+def _should_apply_migration(file_name, context):
     global current_context
 
     # if the migration has any context, only apply when the current context are one of them
@@ -151,18 +149,9 @@ def _should_apply_migration(migration_id, md5sum, context):
         if not re.search(fr'\b{current_context}\b', context):
             return False
 
-    migration = _get_already_applied_migrations().get(migration_id)
+    migration = _get_already_applied_migrations()
 
-    if migration is not None:
-        old_md5sum = migration.get('md5sum')
-
-        if md5sum != old_md5sum:
-            raise Exception(f'Validation error! {migration_id} was: {old_md5sum} but now is: {md5sum}')
-
-        return False
-
-    else:
-        return True
+    return file_name not in migration
 
 
 def _extract_migration_metadata(raw_text):
@@ -175,6 +164,7 @@ def _extract_migration_metadata(raw_text):
         return {'author': author, 'migration_id': migration_id}
 
     else:
+        # TODO: throw error?
         return {}
 
 
@@ -183,13 +173,10 @@ def _get_already_applied_migrations():
 
     if applied_migrations is None:
         applied_migrations = Transaction.select_autocommit(
-            'SELECT ID, MD5SUM FROM DATABASECHANGELOG ORDER BY ORDEREXECUTED'
+            'SELECT FILENAME FROM DATABASECHANGELOG ORDER BY ORDEREXECUTED'
         )
 
-        applied_migrations = {
-            migration.get('ID'): {'md5sum': migration.get('MD5SUM')}
-            for migration in applied_migrations
-        }
+        applied_migrations = [migration.get('FILENAME') for migration in applied_migrations]
 
     return applied_migrations
 
