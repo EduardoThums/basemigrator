@@ -10,6 +10,8 @@ from contextlib import suppress
 
 AUTHOR_AND_ID_REGEX = r'--[\s+]?changeset[\s+]?([^:]+):(.*)'
 COMMENT_REGEX = r'--.*'
+EMPTY_LINE_REGEX = r'^\n'
+
 WAIT_LOCK = 10
 WAIT_PER_STEP = 5
 
@@ -17,7 +19,7 @@ applied_migrations = None
 current_context = None
 
 
-def migrate(app, changelog, context):
+def migrate(app, changelog, context=None):
     global current_context
     current_context = context
 
@@ -102,7 +104,11 @@ def _apply_migration(changelog, migration):
             print(f'--> {file_name}::executed')
 
             with Transaction() as transaction:
-                transaction.executemany(sql, [])
+                for statement in sql.split(';'):
+                    statement = re.sub(EMPTY_LINE_REGEX, '', statement, flags=re.MULTILINE)
+
+                    if statement:
+                        transaction.execute(statement)
 
                 transaction.execute(
                     '''
