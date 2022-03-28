@@ -144,6 +144,9 @@ def _apply_migration(changelog, migration):
                     ]
                 )
 
+                global applied_migrations
+                applied_migrations.append(file_name)
+
             print(f'--> {file_name}::ran successfully')
 
 
@@ -155,9 +158,9 @@ def _should_apply_migration(file_name, context):
         if not re.search(fr'\b{current_context}\b', context):
             return False
 
-    migration = _get_already_applied_migrations()
+    migrations = _get_already_applied_migrations()
 
-    return file_name not in migration
+    return file_name not in migrations
 
 
 def _extract_migration_metadata(raw_text):
