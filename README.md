@@ -26,3 +26,13 @@ $ python
 >>> changelog = f'Path(__file__).parent.absolute()}/migrations'
 >>> migrate(app, changelog)
 ```
+
+## TODO
+
+- Publish package on pypi
+- Improve documentation
+- CI/CD to code linting
+- Support different sql clients(postgres, sqlite3, etc)
+- Contributing section
+- License
+- tests/
