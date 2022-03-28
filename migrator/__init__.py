@@ -33,12 +33,8 @@ def migrate(app, changelog, context=None):
 
         print(f"Reading from {app.config.get('DB_DATABASE', 'hub')}.DATABASECHANGELOG")
 
-        try:
-            with open(f'{changelog}/changelog.yaml', 'r') as file:
-                migrations = yaml.load(file, Loader=yaml.FullLoader)
-
-        except FileNotFoundError:
-            print(f'Failed to read changelog file at {changelog}')
+        with open(f'{changelog}/changelog.yaml', 'r') as file:
+            migrations = yaml.load(file, Loader=yaml.FullLoader)
 
         for migration in migrations:
             _apply_migration(changelog, migration)
