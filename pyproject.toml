@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "migrator"
+name = "basemigrator"
 version = "0.1.0"
 description = ""
 authors = ["Eduardo Cristiano Thums <eduardocristiano01@gmail.com>"]
