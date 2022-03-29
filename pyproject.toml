@@ -1,0 +1,27 @@
+[tool.poetry]
+name = "basemigrator"
+version = "0.1.0"
+description = ""
+authors = ["Eduardo Cristiano Thums <eduardocristiano01@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/EduardoThums/basemigrator"
+repository = "https://github.com/EduardoThums/basemigrator"
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Database",
+    "Programming Language :: Python :: 3.7",
+    "Operating System :: POSIX"
+]
+
+[tool.poetry.dependencies]
+python = "^3.7"
+PyMySQL = "^1.0.2"
+PyYAML = "^6.0"
+
+[tool.poetry.dev-dependencies]
+Flask = "^2.1.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

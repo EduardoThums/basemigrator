@@ -5,7 +5,6 @@ import re
 from time import sleep
 from hashlib import md5
 import yaml
-from contextlib import suppress
 
 
 AUTHOR_AND_ID_REGEX = r'--[\s+]?changeset[\s+]?([^:]+):([^\s]+)[\s+]?(endDelimiter:)?([^\s]+)?'
