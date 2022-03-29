@@ -1,10 +1,10 @@
-# Migrator
+# Base Migrator
 
 
 ## Installation
 
 ```
-$ pip install -e git+git@github.com:EduardoThums/migrator.git@main#egg=migrator
+$ pip install basemigrator
 ```
 
 ## Example
@@ -29,7 +29,6 @@ $ python
 
 ## TODO
 
-- Publish package on pypi
 - Improve documentation
 - CI/CD to code linting
 - Support different sql clients(postgres, sqlite3, etc)
