@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "basemigrator"
-version = "0.1.0"
+version = "0.1.1"
 description = ""
 authors = ["Eduardo Cristiano Thums <eduardocristiano01@gmail.com>"]
 license = "MIT"
