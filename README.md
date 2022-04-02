@@ -34,7 +34,7 @@ The second rule applies for the changelog file format, which depending on her ex
 
 ### XML
 
-```
+```xml
 <?xml version="1.0" encoding="UTF-8"?>
 
 <databaseChangeLog>
@@ -45,15 +45,42 @@ The second rule applies for the changelog file format, which depending on her ex
 
 ### YAML
 
-```
+```yaml
 - file: Table1/Table1-createtable.sql
 - file: Table2/Table2-createtable.sql
   context: dev, prod
 ```
 
+The configuration object passed as a parameter for the function that will execute the migrations should have a field named `config` that at least 
+implements the `__get__()` method and have the following key-values:
+
+```python
+class App:
+
+    def __init__(self):
+        self.config = {
+            'DB_USER': 'user', # the database user
+            'DB_PASSWORD': 'password', # the database password
+            'DB_HOST': 'localhost', # the database host
+            'DB_DATABASE': 'foo' # the database name
+        }
+```
+
+To call the `migrate()` function, three parameters must be given, they are:
+
+```python
+from basemigrator import migrate
+
+migrate(
+  app=app, # the app configuration object
+  changelog='/path/to/migrations', # the full path of the migrations folder
+  context='dev' # the context which the migrations will be applied
+)
+```
+
+
 ## TODO
 
-- Improve documentation
 - CI/CD to code linting
 - Support different sql clients(postgres, sqlite3, etc)
 - Contributing section

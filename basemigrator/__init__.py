@@ -194,10 +194,10 @@ class Transaction:
     def connect(cls, app):
         if cls.connection is None:
             cls.connection = Connection(
-                user=app.config.get('DB_USER', 'cwi'),
-                password=app.config.get('DB_PASSWORD', 'cwi'),
+                user=app.config.get('DB_USER', 'user'),
+                password=app.config.get('DB_PASSWORD', 'password'),
                 host=app.config.get('DB_HOST', 'localhost'),
-                database=app.config.get('DB_DATABASE', 'hub'),
+                database=app.config.get('DB_DATABASE', 'foo'),
                 cursorclass=DictCursor
             )
 
