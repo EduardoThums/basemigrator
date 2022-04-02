@@ -1,5 +1,10 @@
 # Base Migrator
 
+[![PyPI](https://img.shields.io/pypi/v/basemigrator)](https://pypi.python.org/pypi/basemigrator)
+
+Liquibase's almost compatible tool that works very similary, but just using only Python code.
+
+
 
 ## Installation
 
