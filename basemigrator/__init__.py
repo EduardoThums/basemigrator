@@ -4,7 +4,7 @@ import warnings
 import re
 from time import sleep
 from hashlib import md5
-import yaml
+from .changelog_reader import read_changelog
 
 
 AUTHOR_AND_ID_REGEX = r'--[\s+]?changeset[\s+]?([^:]+):([^\s]+)[\s+]?(endDelimiter:)?([^\s]+)?'
@@ -32,8 +32,7 @@ def migrate(app, changelog, context=None):
 
         print(f"Reading from {app.config.get('DB_DATABASE', 'hub')}.DATABASECHANGELOG")
 
-        with open(f'{changelog}/changelog.yaml', 'r') as file:
-            migrations = yaml.load(file, Loader=yaml.FullLoader)
+        migrations = read_changelog(changelog)
 
         for migration in migrations:
             _apply_migration(changelog, migration)
