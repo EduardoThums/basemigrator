@@ -12,24 +12,43 @@ Liquibase's almost compatible tool that works very similary, but just using only
 $ pip install basemigrator
 ```
 
-## Example
+## Usage
+
+There's basicly two rules to use this tool:
+
+1. The changelog file MUST in the same folder as the migrations
+2. The changelog file MUST follow the expected format specified in the documentation
+
+About the first rule, it's simple, follow this folder structure and you will be fine:
 
 ```
-# changelog.yaml
+migrations/
+├── changelog.xml
+├── Table1
+│   └── Table1-createtable.sql
+└── Table2
+    └── Table2-createtable.sql
+```
 
-- file: Book/001-create-table-ddl.sql
-- file: Author/001-create-table-ddl.sql
+The second rule applies for the changelog file format, which depending on her extension, MUST be one of these two:
+
+### XML
+
+```
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog>
+  <include file="Table1/Table1-createtable.sql" relativeToChangelogFile="true" />
+  <include file="Table2/Table2-createtable.sql" relativeToChangelogFile="dev, prod" />
+</databaseChangeLog>
+```
+
+### YAML
+
+```
+- file: Table1/Table1-createtable.sql
+- file: Table2/Table2-createtable.sql
   context: dev, prod
-```
-
-```
-$ python
->>> from migrator import migrate
->>> from flask import Flask
->>> from pathlib import Path
->>> app = Flask(__name__)
->>> changelog = f'Path(__file__).parent.absolute()}/migrations'
->>> migrate(app, changelog)
 ```
 
 ## TODO
