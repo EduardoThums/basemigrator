@@ -1,3 +1,10 @@
+# Version 0.1.2
+
+Released 2022-04-03
+
+- Add support to read xml changelog file
+- Change packaging backend system for setuptools
+
 # Version 0.1.1
 
 Released 2022-03-29
