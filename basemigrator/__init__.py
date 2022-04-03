@@ -169,8 +169,7 @@ def _extract_migration_metadata(raw_text):
         return {'author': author, 'migration_id': migration_id, 'delimiter': delimiter}
 
     else:
-        # TODO: throw error?
-        return {}
+        raise ValueError('Migration metadata not found!')
 
 
 def _get_already_applied_migrations():

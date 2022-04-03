@@ -18,6 +18,7 @@ There's basicly two rules to use this tool:
 
 1. The changelog file MUST in the same folder as the migrations
 2. The changelog file MUST follow the expected format specified in the documentation
+3. The migration SQL file MUST have a set of metadata to be applied properly
 
 About the first rule, it's simple, follow this folder structure and you will be fine:
 
@@ -51,6 +52,15 @@ The second rule applies for the changelog file format, which depending on her ex
   context: dev, prod
 ```
 
+The third rule specifies that the migration must have a set of metadata, which are:
+
+```
+--liquibase formatted sql
+--changeset <author>:<migration-id>
+
+CREATE TABLE Table1();
+```
+
 The configuration object passed as a parameter for the function that will execute the migrations should have a field named `config` that at least 
 implements the `__get__()` method and have the following key-values:
 
@@ -81,7 +91,9 @@ migrate(
 
 ## TODO
 
-- CI/CD to code linting
+- CI/CD
+  - code linting
+  - publish package to pypi
 - Support different sql clients(postgres, sqlite3, etc)
 - Contributing section
 - tests/
