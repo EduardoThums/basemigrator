@@ -80,7 +80,8 @@ class App:
             'DB_USER': 'user', # the database user
             'DB_PASSWORD': 'password', # the database password
             'DB_HOST': 'localhost', # the database host
-            'DB_DATABASE': 'foo' # the database name
+            'DB_DATABASE': 'foo', # the database name
+            'DB_ENGINE': 'MYSQL' # the database engine used, default to MySQL
         }
 ```
 

@@ -196,52 +196,56 @@ class Transaction:
 
     @classmethod
     def connect(cls, app):
-        # MySQL - PyMySQL
-        try:
-            from pymysql.connections import Connection
-            from pymysql.cursors import DictCursor
+        cls._engine = app.config.get('DB_ENGINE', 'MYSQL')
 
-            if cls.connection is None:
-                cls.connection = Connection(
-                    user=app.config.get('DB_USER', 'user'),
-                    password=app.config.get('DB_PASSWORD', 'password'),
-                    host=app.config.get('DB_HOST', 'localhost'),
-                    database=app.config.get('DB_DATABASE', 'foo'),
-                    port=app.config.get('DB_PORT', 3306),
-                    cursorclass=DictCursor
-                )
+        if cls._engine == 'MYSQL':
+            # MySQL - PyMySQL
+            try:
+                from pymysql.connections import Connection
+                from pymysql.cursors import DictCursor
 
-            elif not cls.connection.open:
-                cls.connection.ping(reconnect=True)
+                if cls.connection is None:
+                    cls.connection = Connection(
+                        user=app.config.get('DB_USER', 'user'),
+                        password=app.config.get('DB_PASSWORD', 'password'),
+                        host=app.config.get('DB_HOST', 'localhost'),
+                        database=app.config.get('DB_DATABASE', 'foo'),
+                        port=app.config.get('DB_PORT', 3306),
+                        cursorclass=DictCursor
+                    )
 
-            cls._engine = 'MYSQL'
-            return
+                elif not cls.connection.open:
+                    cls.connection.ping(reconnect=True)
 
-        except ModuleNotFoundError:
-            pass
+                cls._engine = 'MYSQL'
+                return
 
-        # PostegreSQL - Pyscopg
-        try:
-            import psycopg2
-            from psycopg2.extras import RealDictCursor as DictCursorPostgres
+            except ModuleNotFoundError:
+                pass
 
-            if cls.connection is None or cls.connection.closed:
-                cls.connection = psycopg2.connect(
-                    user=app.config.get('DB_USER', 'user'),
-                    password=app.config.get('DB_PASSWORD', 'password'),
-                    host=app.config.get('DB_HOST', 'localhost'),
-                    dbname=app.config.get('DB_DATABASE', 'foo'),
-                    port=app.config.get('DB_PORT', 5432),
-                    cursor_factory=DictCursorPostgres
-                )
+        elif cls._engine == 'POSTGRES':
+            # PostegreSQL - Pyscopg
+            try:
+                import psycopg2
+                from psycopg2.extras import RealDictCursor as DictCursorPostgres
 
-            cls._engine = 'POSTGRESQL'
-            return
+                if cls.connection is None or cls.connection.closed:
+                    cls.connection = psycopg2.connect(
+                        user=app.config.get('DB_USER', 'user'),
+                        password=app.config.get('DB_PASSWORD', 'password'),
+                        host=app.config.get('DB_HOST', 'localhost'),
+                        dbname=app.config.get('DB_DATABASE', 'foo'),
+                        port=app.config.get('DB_PORT', 5432),
+                        cursor_factory=DictCursorPostgres
+                    )
 
-        except ModuleNotFoundError:
-            pass
+                return
 
-        raise ModuleNotFoundError('No database module found! The supported ones are: PyMySQL, Psycopg')
+            except ModuleNotFoundError:
+                pass
+
+        else:
+            raise ModuleNotFoundError('No database module found! The supported ones are: PyMySQL, Psycopg')
 
     def __enter__(self):
         return self.connection.cursor()
@@ -315,7 +319,7 @@ class Transaction:
                         '''
                     )
 
-                elif cls._engine == 'POSTGRESQL':
+                elif cls._engine == 'POSTGRES':
                     transaction.execute(
                         '''
                         CREATE TABLE IF NOT EXISTS DATABASECHANGELOG (
