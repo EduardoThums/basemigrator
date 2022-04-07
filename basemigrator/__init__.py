@@ -2,6 +2,7 @@ import warnings
 import re
 from time import sleep
 from hashlib import md5
+import pathlib
 from .changelog_reader import read_changelog
 
 
@@ -87,8 +88,13 @@ def _release_lock():
 def _apply_migration(changelog, migration):
     file_name = migration.get('file')
     context = migration.get('context')
+    file_path = pathlib.Path(f'{changelog}/{file_name}')
 
-    with open(f'{changelog}/{file_name}', 'r') as file:
+    # ignore when the file path has no suffix
+    if not file_path.suffix:
+        return
+
+    with open(file_path, 'r') as file:
         raw_text = file.read()
         md5sum = md5(raw_text.encode('utf-8')).hexdigest()
 
