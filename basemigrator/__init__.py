@@ -90,8 +90,9 @@ def _apply_migration(changelog, migration):
     context = migration.get('context')
     file_path = pathlib.Path(f'{changelog}/{file_name}')
 
-    if file_path.suffix == '.sql' and not file_path.is_file():
-        raise FileNotFoundError(f'No such file or directory {file_path}')
+    # ignore when the file path has no suffix
+    if not file_path.suffix:
+        return
 
     with open(file_path, 'r') as file:
         raw_text = file.read()
