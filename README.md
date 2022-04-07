@@ -8,8 +8,16 @@ Liquibase's almost compatible tool that works very similary, but just using only
 
 ## Installation
 
+To use at a MySQL database:
+
 ```
-$ pip install basemigrator
+$ pip install basemigrator[mysql]
+```
+
+To use at a PostgreSQL database:
+
+```
+$ pip install basemigrator[postgresql]
 ```
 
 ## Usage
@@ -89,11 +97,19 @@ migrate(
 ```
 
 
+## Supported databases
+
+- MySQL
+- PostgreSQL
+
+### PostgreSQL
+
+Currently, procedures create statements are not supported.
+
 ## TODO
 
 - CI/CD
   - code linting
   - publish package to pypi
-- Support different sql clients(postgres, sqlite3, etc)
 - Contributing section
 - tests/
