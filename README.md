@@ -89,11 +89,19 @@ migrate(
 ```
 
 
+## Supported databases
+
+- MySQL
+- PostgreSQL
+
+### PostgreSQL
+
+Currently, procedures create statements are not supported.
+
 ## TODO
 
 - CI/CD
   - code linting
   - publish package to pypi
-- Support different sql clients(postgres, sqlite3, etc)
 - Contributing section
 - tests/

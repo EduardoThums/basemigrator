@@ -1,5 +1,3 @@
-from pymysql.connections import Connection
-from pymysql.cursors import DictCursor
 import warnings
 import re
 from time import sleep
@@ -55,11 +53,17 @@ def _create_lock():
 
     with Transaction() as transaction:
         while wait_lock > 0:
-            transaction.execute('SELECT LOCKED, LOCKEDBY FROM DATABASECHANGELOGLOCK ORDER BY ID')
+            transaction.execute('SELECT LOCKED AS "LOCKED", LOCKEDBY AS "LOCKEDBY" FROM DATABASECHANGELOGLOCK')
             current_lock = transaction.fetchone()
 
-            # workaround to support bit column
-            if current_lock.get('LOCKED').hex()[-1] == '1':
+            if isinstance(current_lock.get('LOCKED'), bytes):
+                # workaround to support bit column
+                is_locked = current_lock.get('LOCKED').hex()[-1] == '1'
+
+            elif isinstance(current_lock.get('LOCKED'), (bool, int)):
+                is_locked = bool(current_lock.get('LOCKED'))
+
+            if is_locked:
                 print(f'Database is currently locked! Waiting {WAIT_PER_STEP} seconds to try again...')
 
                 sleep(WAIT_PER_STEP)
@@ -67,7 +71,7 @@ def _create_lock():
 
             else:
                 print('Successfully acquired change log lock')
-                transaction.execute('UPDATE DATABASECHANGELOGLOCK SET LOCKED = 1 WHERE ID = 1')
+                transaction.execute('UPDATE DATABASECHANGELOGLOCK SET LOCKED = TRUE WHERE ID = 1')
                 return
 
         else:
@@ -76,7 +80,7 @@ def _create_lock():
 
 def _release_lock():
     with Transaction() as transaction:
-        transaction.execute('UPDATE DATABASECHANGELOGLOCK SET LOCKED = 0 WHERE ID = 1')
+        transaction.execute('UPDATE DATABASECHANGELOGLOCK SET LOCKED = FALSE WHERE ID = 1')
         print('Successfully released change log lock')
 
 
@@ -120,7 +124,7 @@ def _apply_migration(changelog, migration):
                     %s,
                     %s,
                     NOW(),
-                    IFNULL(
+                    COALESCE(
                         (SELECT ORDEREXECUTED + 1 FROM DATABASECHANGELOG d ORDER BY ORDEREXECUTED DESC LIMIT 1),
                         1
                     ),
@@ -177,7 +181,7 @@ def _get_already_applied_migrations():
 
     if applied_migrations is None:
         applied_migrations = Transaction.select_autocommit(
-            'SELECT FILENAME FROM DATABASECHANGELOG ORDER BY ORDEREXECUTED'
+            'SELECT FILENAME AS "FILENAME" FROM DATABASECHANGELOG ORDER BY ORDEREXECUTED'
         )
 
         applied_migrations = [migration.get('FILENAME') for migration in applied_migrations]
@@ -188,23 +192,58 @@ def _get_already_applied_migrations():
 class Transaction:
 
     connection = None
+    _engine = None
 
     @classmethod
     def connect(cls, app):
-        if cls.connection is None:
-            cls.connection = Connection(
-                user=app.config.get('DB_USER', 'user'),
-                password=app.config.get('DB_PASSWORD', 'password'),
-                host=app.config.get('DB_HOST', 'localhost'),
-                database=app.config.get('DB_DATABASE', 'foo'),
-                cursorclass=DictCursor
-            )
+        # MySQL - PyMySQL
+        try:
+            from pymysql.connections import Connection
+            from pymysql.cursors import DictCursor
 
-        elif not cls.connection.open:
-            cls.connection.ping(reconnect=True)
+            if cls.connection is None:
+                cls.connection = Connection(
+                    user=app.config.get('DB_USER', 'user'),
+                    password=app.config.get('DB_PASSWORD', 'password'),
+                    host=app.config.get('DB_HOST', 'localhost'),
+                    database=app.config.get('DB_DATABASE', 'foo'),
+                    port=app.config.get('DB_PORT', 3306),
+                    cursorclass=DictCursor
+                )
+
+            elif not cls.connection.open:
+                cls.connection.ping(reconnect=True)
+
+            cls._engine = 'MYSQL'
+            return
+
+        except ModuleNotFoundError:
+            pass
+
+        # PostegreSQL - Pyscopg
+        try:
+            import psycopg2
+            from psycopg2.extras import RealDictCursor as DictCursorPostgres
+
+            if cls.connection is None or cls.connection.closed:
+                cls.connection = psycopg2.connect(
+                    user=app.config.get('DB_USER', 'user'),
+                    password=app.config.get('DB_PASSWORD', 'password'),
+                    host=app.config.get('DB_HOST', 'localhost'),
+                    dbname=app.config.get('DB_DATABASE', 'foo'),
+                    port=app.config.get('DB_PORT', 5432),
+                    cursor_factory=DictCursorPostgres
+                )
+
+            cls._engine = 'POSTGRESQL'
+            return
+
+        except ModuleNotFoundError:
+            pass
+
+        raise ModuleNotFoundError('No database module found! The supported ones are: PyMySQL, Psycopg')
 
     def __enter__(self):
-        self.connection.begin()
         return self.connection.cursor()
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
@@ -221,59 +260,115 @@ class Transaction:
         cls.connect(app)
 
         with cls() as transaction:
-            # nothing to see here >.>
+            # ignore warnings telling that the tables already exists
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
 
-                transaction.execute(
-                    '''
-                    CREATE TABLE IF NOT EXISTS DATABASECHANGELOG (
-                        ID varchar(255) NOT NULL,
-                        AUTHOR varchar(255) NOT NULL,
-                        FILENAME varchar(255) NOT NULL,
-                        DATEEXECUTED datetime NOT NULL,
-                        ORDEREXECUTED int(11) NOT NULL,
-                        EXECTYPE varchar(10) NOT NULL,
-                        MD5SUM varchar(35) DEFAULT NULL,
-                        DESCRIPTION varchar(255) DEFAULT NULL,
-                        COMMENTS varchar(255) DEFAULT NULL,
-                        TAG varchar(255) DEFAULT NULL,
-                        LIQUIBASE varchar(20) DEFAULT NULL,
-                        CONTEXTS varchar(255) DEFAULT NULL,
-                        LABELS varchar(255) DEFAULT NULL,
-                        DEPLOYMENT_ID varchar(10) DEFAULT NULL
+                if cls._engine == 'MYSQL':
+                    transaction.execute(
+                        '''
+                        CREATE TABLE IF NOT EXISTS DATABASECHANGELOG (
+                            ID varchar(255) NOT NULL,
+                            AUTHOR varchar(255) NOT NULL,
+                            FILENAME varchar(255) NOT NULL,
+                            DATEEXECUTED datetime NOT NULL,
+                            ORDEREXECUTED int(11) NOT NULL,
+                            EXECTYPE varchar(10) NOT NULL,
+                            MD5SUM varchar(35) DEFAULT NULL,
+                            DESCRIPTION varchar(255) DEFAULT NULL,
+                            COMMENTS varchar(255) DEFAULT NULL,
+                            TAG varchar(255) DEFAULT NULL,
+                            LIQUIBASE varchar(20) DEFAULT NULL,
+                            CONTEXTS varchar(255) DEFAULT NULL,
+                            LABELS varchar(255) DEFAULT NULL,
+                            DEPLOYMENT_ID varchar(10) DEFAULT NULL
+                        )
+                        '''
                     )
-                    '''
-                )
 
-                transaction.execute(
-                    '''
-                    CREATE TABLE IF NOT EXISTS DATABASECHANGELOGLOCK (
-                        ID int(11) NOT NULL,
-                        LOCKED bit(1) NOT NULL,
-                        LOCKGRANTED datetime DEFAULT NULL,
-                        LOCKEDBY varchar(255) DEFAULT NULL,
-                        PRIMARY KEY (ID)
+                    transaction.execute(
+                        '''
+                        CREATE TABLE IF NOT EXISTS DATABASECHANGELOGLOCK (
+                            ID int(11) NOT NULL,
+                            LOCKED bit(1) NOT NULL,
+                            LOCKGRANTED datetime DEFAULT NULL,
+                            LOCKEDBY varchar(255) DEFAULT NULL,
+                            PRIMARY KEY (ID)
+                        )
+                        '''
                     )
-                    '''
-                )
 
-                transaction.execute(
-                    '''
-                    INSERT IGNORE INTO DATABASECHANGELOGLOCK (
-                        ID,
-                        LOCKED,
-                        LOCKGRANTED,
-                        LOCKEDBY
+                    transaction.execute(
+                        '''
+                        INSERT IGNORE INTO DATABASECHANGELOGLOCK (
+                            ID,
+                            LOCKED,
+                            LOCKGRANTED,
+                            LOCKEDBY
+                        )
+                        VALUES (
+                            1,
+                            FALSE,
+                            NULL,
+                            NULL
+                        )
+                        '''
                     )
-                    VALUES (
-                        1,
-                        FALSE,
-                        NULL,
-                        NULL
+
+                elif cls._engine == 'POSTGRESQL':
+                    transaction.execute(
+                        '''
+                        CREATE TABLE IF NOT EXISTS DATABASECHANGELOG (
+                            ID varchar(255) NOT NULL,
+                            AUTHOR varchar(255) NOT NULL,
+                            FILENAME varchar(255) NOT NULL,
+                            DATEEXECUTED timestamp NOT NULL,
+                            ORDEREXECUTED INTEGER NOT NULL,
+                            EXECTYPE varchar(10) NOT NULL,
+                            MD5SUM varchar(35) DEFAULT NULL,
+                            DESCRIPTION varchar(255) DEFAULT NULL,
+                            COMMENTS varchar(255) DEFAULT NULL,
+                            TAG varchar(255) DEFAULT NULL,
+                            LIQUIBASE varchar(20) DEFAULT NULL,
+                            CONTEXTS varchar(255) DEFAULT NULL,
+                            LABELS varchar(255) DEFAULT NULL,
+                            DEPLOYMENT_ID varchar(10) DEFAULT NULL
+                        )
+                        '''
                     )
-                    '''
-                )
+
+                    transaction.execute(
+                        '''
+                        CREATE TABLE IF NOT EXISTS DATABASECHANGELOGLOCK (
+                            ID INTEGER NOT NULL,
+                            LOCKED BOOLEAN NOT NULL,
+                            LOCKGRANTED timestamp DEFAULT NULL,
+                            LOCKEDBY varchar(255) DEFAULT NULL,
+                            PRIMARY KEY (ID)
+                        )
+                        '''
+                    )
+
+                    transaction.execute(
+                        '''
+                        INSERT INTO DATABASECHANGELOGLOCK (
+                            ID,
+                            LOCKED,
+                            LOCKGRANTED,
+                            LOCKEDBY
+                        )
+                        VALUES (
+                            1,
+                            FALSE,
+                            NULL,
+                            NULL
+                        )
+                        ON CONFLICT(ID) DO NOTHING
+                        '''
+                    )
+
+                else:
+                    raise ValueError(f'Engine {cls._engine} not supported')
 
     @classmethod
     def close(cls):
