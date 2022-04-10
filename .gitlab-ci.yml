@@ -1,0 +1,9 @@
+stages:
+  - stage1
+
+flake8:
+  stage: stage1
+  script:
+    - pip install -r requirements-test.txt
+    - flake8 --max-line-length=120 --show-source basemigrator/
+
